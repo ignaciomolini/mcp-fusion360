@@ -1,0 +1,59 @@
+# openspec/config.yaml
+schema: spec-driven
+
+context: |
+  Project: mcp-fusion360 — Fusion 360 MCP Server for AI-driven CAD operations.
+  Architecture: Two-component system.
+    - Component A: Fusion 360 Add-in (Python, adsk API, embedded interpreter). Local HTTP/WS server.
+      NOT testable outside Fusion 360 — requires adsk module and main-thread execution via CustomEvent.
+    - Component B: MCP Wrapper (Node.js/TypeScript, @modelcontextprotocol/sdk). stdio MCP server.
+      Communicates with Component A over localhost. Testable with standard Node.js tooling.
+    - Protocol: Component A serves, Component B consumes. No adsk imports in Component B.
+
+testing:
+  strict_tdd: false
+  note: >
+    Component A requires Fusion 360's embedded Python — no system Python available, and adsk
+    cannot be installed via pip. Component B can use Node.js testing tools once configured.
+  layers:
+    unit:
+      component_a: false
+      component_b: true
+    integration:
+      component_a: false
+      component_b: true
+    e2e:
+      available: false
+      note: Requires running Fusion 360 GUI
+  coverage: false
+  quality:
+    linter: false
+    type_checker: false
+    formatter: false
+
+rules:
+  proposal:
+    - Include rollback plan for risky changes
+    - Specify which component(s) the change affects
+  specs:
+    - Use Given/When/Then for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+    - Separate specs per component (A/B)
+  design:
+    - Include sequence diagrams for complex flows
+    - Document architecture decisions with rationale
+    - Specify communication protocol (HTTP endpoints / WS messages)
+  tasks:
+    - Group by phase, use hierarchical numbering
+    - Keep tasks completable in one session
+    - Separate tasks per component
+  apply:
+    - Follow existing code patterns
+    tdd: false
+    test_command: ""
+  verify:
+    test_command: ""
+    build_command: ""
+    coverage_threshold: 0
+  archive:
+    - Warn before merging destructive deltas
