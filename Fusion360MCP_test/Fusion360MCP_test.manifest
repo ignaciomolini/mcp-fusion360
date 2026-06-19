@@ -1,10 +1,9 @@
-<?xml version="1.0" encoding="utf-8"?>
-<AddInScript>
-  <AddInId>{00000000-0000-0000-0000-000000000001}</AddInId>
-  <Name>Fusion360MCP_test</Name>
-  <Description>Minimal test add-in to diagnose loader rejection</Description>
-  <Version>1.0.0</Version>
-  <StartupScripts>
-    <Script>Fusion360MCP_test.py</Script>
-  </StartupScripts>
-</AddInScript>
+{
+    "autodeskProduct": "Fusion",
+    "type": "script",
+    "author": "Ignacio Molini",
+    "description": { "": "Minimal test add-in to diagnose loader rejection" },
+    "version": "1.0.0",
+    "supportedOS": "windows|mac",
+    "editEnabled": true
+}
