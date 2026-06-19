@@ -9,7 +9,27 @@ Concurrent requests are queued and processed sequentially.
 import queue
 import threading
 
+import adsk.core
+
 from errors import FusionAPIError, OPERATION_TIMEOUT
+
+
+class _BridgeEventHandler(adsk.core.CustomEventHandler):
+    """CustomEventHandler adapter for the RequestBridge.
+
+    The new Fusion 360 app API requires the handler to be a CustomEventHandler
+    subclass (not a plain function), and registerCustomEvent() takes only the
+    event id — the handler is then assigned via the returned CustomEvent's
+    .add() method. This adapter forwards notify() calls to the bridge.
+    """
+
+    def __init__(self, bridge):
+        super().__init__()
+        self._bridge = bridge
+
+    def notify(self, eventArgs):
+        """Called by Fusion on the main thread when the CustomEvent fires."""
+        self._bridge._on_custom_event(eventArgs)
 
 
 class RequestBridge:
@@ -30,6 +50,8 @@ class RequestBridge:
         self._queue = queue.Queue()
         self._handler_registered = False
         self._app = None
+        self._event = None
+        self._event_handler = None
 
     def register(self, app, handlers):
         """Register the CustomEvent handler with the Fusion application.
@@ -43,17 +65,35 @@ class RequestBridge:
         """
         self._app = app
         self._handlers = handlers
-        app.registerCustomEvent(self._event_id, self._on_custom_event)
+        # New API: registerCustomEvent takes only the event id and returns
+        # a CustomEvent object to which the handler is then attached.
+        self._event = app.registerCustomEvent(self._event_id)
+        if self._event is None:
+            raise RuntimeError(
+                "Failed to register CustomEvent '{}' (likely duplicate id)".format(
+                    self._event_id
+                )
+            )
+        self._event_handler = _BridgeEventHandler(self)
+        self._event.add(self._event_handler)
         self._handler_registered = True
 
     def unregister(self):
         """Unregister the CustomEvent. Called during add-in unload."""
         if self._handler_registered and self._app:
             try:
+                # Remove handler first to break the reference, then unregister.
+                if self._event is not None and self._event_handler is not None:
+                    try:
+                        self._event.remove(self._event_handler)
+                    except Exception:
+                        pass
                 self._app.unregisterCustomEvent(self._event_id)
             except Exception:
                 pass
             self._handler_registered = False
+            self._event = None
+            self._event_handler = None
 
     def submit(self, method, params, timeout=30):
         """Submit a request to be processed on the main thread.
