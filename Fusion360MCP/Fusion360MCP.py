@@ -6,6 +6,16 @@ that delegates API calls to Fusion's main thread.
 Loaded by Fusion 360 when the add-in is started.
 """
 
+import os
+import sys
+
+# Ensure the add-in directory is on sys.path so we can import local modules.
+# The new Electron-based Fusion 360 app does not add the script's directory
+# to sys.path automatically (unlike the legacy app), so we do it explicitly.
+_ADDIN_DIR = os.path.dirname(os.path.abspath(__file__))
+if _ADDIN_DIR not in sys.path:
+    sys.path.insert(0, _ADDIN_DIR)
+
 import adsk.core
 
 from server import start_server
