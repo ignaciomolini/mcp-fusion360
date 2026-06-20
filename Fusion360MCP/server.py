@@ -42,6 +42,11 @@ METHODS = {
     "create_circular_cutout",
     "create_rectangular_cutout",
     "create_slot_cutout",
+    "list_bodies",
+    "get_document_info",
+    "get_body_info",
+    "list_features",
+    "list_sketches",
 }
 
 

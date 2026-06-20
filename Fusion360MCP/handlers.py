@@ -5,6 +5,8 @@ Handlers run on Fusion's main thread (dispatched by RequestBridge),
 so they can use the adsk API directly.
 """
 
+from datetime import datetime, timezone
+
 import adsk.core
 import adsk.fusion
 
@@ -61,9 +63,15 @@ def _get_unit_label(param):
 def handle_get_active_design_parameters(params):
     """Return all User Parameters from the active design.
 
+    Each entry is augmented with the additive fields ``comment`` and
+    ``is_favorite``. ``comment`` is the parameter's optional free-form
+    description (``None`` when not set) and ``is_favorite`` reflects the
+    user-marked favorite flag in the Parameters dialog.
+
     Returns:
         dict with 'parameters' key containing a list of parameter objects,
-        each with: name, expression, value (converted to mm or deg), unit.
+        each with: name, expression, value (converted to mm or deg), unit,
+        comment (str or None), is_favorite (bool).
     """
     design = _get_active_design()
     parameters = []
@@ -82,9 +90,28 @@ def handle_get_active_design_parameters(params):
             "expression": param.expression,
             "value": display_value,
             "unit": unit,
+            "comment": _safe_param_comment(param),
+            "is_favorite": bool(param.isFavorite),
         })
 
     return {"parameters": parameters}
+
+
+def _safe_param_comment(param):
+    """Return the parameter's comment, or None if the API raises.
+
+    Some Fusion 360 builds raise on ``param.comment`` access for
+    parameters that have never been edited. Treat any failure as
+    "no comment set" so the read path stays non-fatal.
+    """
+    try:
+        comment = param.comment
+    except Exception:
+        return None
+    if comment is None:
+        return None
+    stripped = str(comment).strip()
+    return stripped or None
 
 
 def handle_measure_clearance(params):
@@ -564,6 +591,256 @@ def handle_create_slot_cutout(params):
     )
 
 
+def handle_list_bodies(params):
+    """Return every solid/surface body in the root component.
+
+    Each entry exposes the body's display ``name`` and a 1-based
+    ``index`` that matches the ``face_index`` convention used by the
+    cutout tools. Iteration is read-only — no ``computeAll()`` and no
+    mutation. The order follows the BRepBodies collection (positional,
+    not a stable identifier).
+
+    Returns:
+        dict with 'bodies' key: a list of {'name', 'index'} objects.
+
+    Raises:
+        FusionAPIError(NO_ACTIVE_DESIGN): if no design is open.
+    """
+    design = _get_active_design()
+    bodies = []
+    root = design.rootComponent
+    b_rep_bodies = root.bRepBodies
+
+    for i in range(b_rep_bodies.count):
+        body = b_rep_bodies.item(i)
+        bodies.append({
+            "name": body.name,
+            "index": i + 1,
+        })
+
+    return {"bodies": bodies}
+
+
+def handle_get_document_info(params):
+    """Return metadata about the active document.
+
+    Fields:
+      - name: document display name
+      - units: normalized length unit ("mm" or "cm"); other units
+        (e.g. "in", "ft") are passed through verbatim
+      - design_type: "ParametricDesign" or "DirectDesign"
+      - material_library: name of the first loaded material library,
+        or "" if none are loaded
+
+    The lookup is read-only and does not trigger ``computeAll()``.
+
+    Returns:
+        dict with name, units, design_type, material_library.
+
+    Raises:
+        FusionAPIError(NO_ACTIVE_DESIGN): if no document is open.
+    """
+    app = adsk.core.Application.get()
+    doc = app.activeDocument
+    if doc is None:
+        raise FusionAPIError(NO_ACTIVE_DESIGN, "No active document open")
+
+    design = adsk.fusion.Design.cast(app.activeProduct)
+    if design is None:
+        raise FusionAPIError(NO_ACTIVE_DESIGN, "No active design open")
+
+    units = _normalize_length_units(str(doc.unitsManager.defaultLengthUnits))
+
+    design_type = _normalize_design_type(design.designType)
+
+    material_library = ""
+    try:
+        libs = app.materialLibraries
+        if libs.count > 0:
+            material_library = libs.item(0).name or ""
+    except Exception:
+        material_library = ""
+
+    return {
+        "name": doc.name,
+        "units": units,
+        "design_type": design_type,
+        "material_library": material_library,
+    }
+
+
+def _normalize_length_units(raw_unit):
+    """Map Fusion 360 length-unit strings to the documented enum.
+
+    The spec enumerates "mm" and "cm" as the expected values. Other
+    length units (in, ft, m, …) are passed through unchanged so the
+    call never silently lies about the actual document units.
+    """
+    if raw_unit == "mm" or raw_unit == "cm":
+        return raw_unit
+    return raw_unit
+
+
+def _normalize_design_type(design_type):
+    """Map ``Design.designType`` to the documented string form.
+
+    The Fusion 360 ``DesignTypes`` enum exposes only
+    ``ParametricDesignType`` and ``DirectDesignType``. We map both to
+    stable strings; the spec's "PlasticDesign" was a forward-looking
+    value that does not exist in the current API.
+    """
+    try:
+        if design_type == adsk.fusion.DesignTypes.ParametricDesignType:
+            return "ParametricDesign"
+        if design_type == adsk.fusion.DesignTypes.DirectDesignType:
+            return "DirectDesign"
+    except Exception:
+        pass
+    return str(design_type)
+
+
+def handle_get_body_info(params):
+    """Return physical properties of a named body.
+
+    Args:
+        body_name (str): exact name of the body to inspect.
+
+    Returns:
+        dict with face_count (int), bounding_box (mm, with min/max
+        x/y/z), volume_cm3 (float), material (str or None), and
+        body_type ("SolidBody" or "SurfaceBody").
+
+    Raises:
+        FusionAPIError(INVALID_PARAMETER): empty or missing body_name,
+            or no body with that name exists.
+        FusionAPIError(NO_ACTIVE_DESIGN): no design is open.
+    """
+    body_name = params.get("body_name")
+    if not isinstance(body_name, str) or body_name.strip() == "":
+        raise FusionAPIError(
+            INVALID_PARAMETER,
+            "body_name is required and must be a non-empty string",
+        )
+
+    design = _get_active_design()
+    body = resolve_body(design, body_name)
+
+    bbox = body.boundingBox
+    bounding_box = {
+        "min": {
+            "x": cm_to_mm(bbox.minPoint.x),
+            "y": cm_to_mm(bbox.minPoint.y),
+            "z": cm_to_mm(bbox.minPoint.z),
+        },
+        "max": {
+            "x": cm_to_mm(bbox.maxPoint.x),
+            "y": cm_to_mm(bbox.maxPoint.y),
+            "z": cm_to_mm(bbox.maxPoint.z),
+        },
+    }
+
+    material = None
+    if body.material is not None:
+        try:
+            material = body.material.name
+        except Exception:
+            material = None
+
+    body_type = "SolidBody" if bool(body.isSolid) else "SurfaceBody"
+
+    return {
+        "face_count": int(body.faces.count),
+        "bounding_box": bounding_box,
+        "volume_cm3": float(body.volume),
+        "material": material,
+        "body_type": body_type,
+    }
+
+
+def handle_list_features(params):
+    """Return features from the root component timeline.
+
+    The Fusion 360 Python API does not expose a per-feature creation
+    timestamp, so the response's ``timestamp`` field is captured at
+    handler call time (``utcnow().isoformat() + "Z"``). Document this
+    so consumers do not read it as "when the feature was created".
+
+    The array is capped at 200 entries; if the design has more the
+    response includes a top-level ``truncated: true`` flag.
+
+    Returns:
+        dict with 'features' list and 'truncated' bool.
+
+    Raises:
+        FusionAPIError(NO_ACTIVE_DESIGN): no design is open.
+    """
+    design = _get_active_design()
+    features = design.rootComponent.features
+    total = features.count
+    cap = 200
+    truncated = total > cap
+
+    captured_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    entries = []
+    upper = min(total, cap)
+    for i in range(upper):
+        feature = features.item(i)
+        raw_type = str(feature.objectType)
+        short_type = raw_type.split(".")[-1] if raw_type else ""
+        entries.append({
+            "name": feature.name,
+            "type": short_type,
+            "is_suppressed": bool(feature.isSuppressed),
+            "timestamp": captured_at,
+        })
+
+    return {
+        "features": entries,
+        "truncated": truncated,
+    }
+
+
+def handle_list_sketches(params):
+    """Return sketches in the root component.
+
+    Each entry exposes the sketch's display name, the count of
+    contained profiles, and an array of ``entityToken`` strings for
+    the entities the sketch references (typically its reference
+    plane). When a sketch has no reference plane (e.g. direct
+    modeling or surface-based sketches) the array is empty.
+
+    Returns:
+        dict with 'sketches' list.
+
+    Raises:
+        FusionAPIError(NO_ACTIVE_DESIGN): no design is open.
+    """
+    design = _get_active_design()
+    sketches = design.rootComponent.sketches
+
+    entries = []
+    for i in range(sketches.count):
+        sketch = sketches.item(i)
+        referenced = []
+        ref_plane = sketch.referencePlane
+        if ref_plane is not None:
+            try:
+                token = ref_plane.entityToken
+            except Exception:
+                token = None
+            if token:
+                referenced.append(token)
+
+        entries.append({
+            "name": sketch.name,
+            "profile_count": int(sketch.profiles.count),
+            "referenced_geometry": referenced,
+        })
+
+    return {"sketches": entries}
+
+
 # Handler registry: maps JSON-RPC method names to handler functions
 HANDLERS = {
     "get_active_design_parameters": handle_get_active_design_parameters,
@@ -572,4 +849,9 @@ HANDLERS = {
     "create_circular_cutout": handle_create_circular_cutout,
     "create_rectangular_cutout": handle_create_rectangular_cutout,
     "create_slot_cutout": handle_create_slot_cutout,
+    "list_bodies": handle_list_bodies,
+    "get_document_info": handle_get_document_info,
+    "get_body_info": handle_get_body_info,
+    "list_features": handle_list_features,
+    "list_sketches": handle_list_sketches,
 }
