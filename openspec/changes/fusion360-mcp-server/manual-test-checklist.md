@@ -92,6 +92,33 @@ Prerequisite: a solid body named `Panel` with at least one planar face.
 
 ---
 
+## G. Introspection Tools (Component A — `fusion360-extended-tools` change)
+
+Prerequisite: open the "Escritorio" design (or any design with at least one solid body, one user parameter, one sketch, and a mix of features). These cases verify the five new read-only tools plus the additive `get_active_design_parameters` delta.
+
+| # | Tool | Params | Expected Result | Status |
+|---|------|--------|-----------------|--------|
+| G1 | `list_bodies` | `{}` | `{"bodies": [{"name": "<sheet-of-steel body>", "index": 1}, ...]}` — one entry per body in the root component, 1-based indices | [ ] |
+| G2 | `list_bodies` (empty design) | Open a brand-new design with no bodies; call `{}` | `{"bodies": []}` (empty array, not an error) | [ ] |
+| G3 | `get_document_info` | `{}` | `{"name": "Escritorio", "units": "mm", "design_type": "ParametricDesign", "material_library": "<non-empty string>"}` (units are `"mm"` or `"cm"` per document preference) | [ ] |
+| G4 | `get_body_info` (valid body) | `{"body_name": "<body from G1>"}` | Returns `face_count` (actual total), `bounding_box.min/max.{x,y,z}` in **mm** (not cm), `volume_cm3` (raw cm³), `material` (string or `null`), `body_type` (`"SolidBody"` or `"SurfaceBody"`) | [ ] |
+| G5 | `get_body_info` (missing body) | `{"body_name": "Ghost"}` | Error `-32001` with message `Body 'Ghost' not found` | [ ] |
+| G6 | `get_body_info` (empty name) | `{"body_name": ""}` | Error `-32001` (validation rejects empty string) | [ ] |
+| G7 | `list_features` (mixed features) | `{}` | `{"features": [...], "truncated": false}` — every entry has `name`, `type` (e.g. `"ExtrudeFeature"`), `is_suppressed` (bool), `timestamp` (ISO 8601 string captured at handler time, suffixed with `Z`) | [ ] |
+| G8 | `list_features` (>200 features) | Open a design with 300+ features; call `{}` | `{"features": [...200 entries...], "truncated": true}` | [ ] |
+| G9 | `list_sketches` | `{}` | `{"sketches": [{"name": "<sketch name>", "profile_count": <int>, "referenced_geometry": ["<entityToken>", ...]}]}` — `referenced_geometry` is `[]` for sketches without a reference plane | [ ] |
+| G10 | All 5 new tools (no design) | Close all documents; call `list_bodies`, `get_document_info`, `get_body_info`, `list_features`, `list_sketches` | Every call returns error `-32002` (no active design) | [ ] |
+| G11 | `get_active_design_parameters` (delta) | `{}` | Each entry has `name`, `expression`, `value`, `unit` **plus** `comment` (string or `null`) and `is_favorite` (boolean) | [ ] |
+
+### Notes for the G section
+
+- The 5 new handlers are pure read operations — no `computeAll()` and no design mutation. Safe to re-run.
+- `list_features` timestamps reflect **handler call time**, not feature creation time (the Fusion API has no creation date).
+- `get_body_info` returns the bounding box in **mm** (the existing mm↔cm convention), but volume stays in **cm³** (Fusion's native unit).
+- `material_library` will be the name of the first loaded material library; an empty string is acceptable when no libraries are loaded (defensive default).
+
+---
+
 ## Sign-off
 
 | Role | Name | Date | Result |
