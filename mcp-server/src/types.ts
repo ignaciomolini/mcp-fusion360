@@ -30,3 +30,66 @@ export interface McpToolResult {
   content: Array<{ type: "text"; text: string }>;
   isError?: boolean;
 }
+
+/** A point in 3D space, used for bounding box corners. */
+export interface Point3D {
+  x: number;
+  y: number;
+  z: number;
+}
+
+/** Axis-aligned bounding box with min/max corners in millimeters. */
+export interface BoundingBox {
+  min: Point3D;
+  max: Point3D;
+}
+
+/** Result of `get_body_info`. Documentation-only — the MCP `registerTool`
+ *  API does not require typed results; the runtime payload is whatever
+ *  Component A returns. */
+export interface BodyInfo {
+  face_count: number;
+  bounding_box: BoundingBox;
+  volume_cm3: number;
+  material: string | null;
+  body_type: "SolidBody" | "SurfaceBody";
+}
+
+/** Result of `list_bodies`. */
+export interface ListBodiesResult {
+  bodies: Array<{ name: string; index: number }>;
+}
+
+/** Result of `get_document_info`. */
+export interface DocumentInfo {
+  name: string;
+  units: string;
+  design_type: "ParametricDesign" | "DirectDesign" | string;
+  material_library: string;
+}
+
+/** Single feature entry from `list_features`. */
+export interface FeatureSummary {
+  name: string;
+  type: string;
+  is_suppressed: boolean;
+  timestamp: string;
+}
+
+/** Result of `list_features`. */
+export interface ListFeaturesResult {
+  features: FeatureSummary[];
+  truncated: boolean;
+}
+
+/** Single sketch entry from `list_sketches`. */
+export interface SketchSummary {
+  name: string;
+  profile_count: number;
+  referenced_geometry: string[];
+}
+
+/** Result of `list_sketches`. */
+export interface ListSketchesResult {
+  sketches: SketchSummary[];
+}

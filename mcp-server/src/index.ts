@@ -16,6 +16,16 @@ import {
   handleCreateRectangularCutout,
   createSlotCutoutShape,
   handleCreateSlotCutout,
+  listBodiesShape,
+  handleListBodies,
+  getDocumentInfoShape,
+  handleGetDocumentInfo,
+  getBodyInfoShape,
+  handleGetBodyInfo,
+  listFeaturesShape,
+  handleListFeatures,
+  listSketchesShape,
+  handleListSketches,
 } from "./tools.js";
 
 const server = new McpServer({
@@ -66,6 +76,37 @@ server.tool(
   "Create a slot (obround) cutout on a face.",
   createSlotCutoutShape,
   async (args) => handleCreateSlotCutout(client, args),
+);
+
+server.tool(
+  "list_bodies",
+  "List all solid/surface bodies in the root component.",
+  async () => handleListBodies(client),
+);
+
+server.tool(
+  "get_document_info",
+  "Get active document metadata (name, units, design type, material library).",
+  async () => handleGetDocumentInfo(client),
+);
+
+server.tool(
+  "get_body_info",
+  "Get physical properties of a named body (face count, bounding box, volume, material, type).",
+  getBodyInfoShape,
+  async (args) => handleGetBodyInfo(client, args),
+);
+
+server.tool(
+  "list_features",
+  "List features in the root component timeline (capped at 200).",
+  async () => handleListFeatures(client),
+);
+
+server.tool(
+  "list_sketches",
+  "List sketches in the root component (name, profile count, referenced geometry).",
+  async () => handleListSketches(client),
 );
 
 async function main() {

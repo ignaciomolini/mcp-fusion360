@@ -124,3 +124,69 @@ export async function handleCreateSlotCutout(
 ): Promise<McpToolResult> {
   return client.call("create_slot_cutout", args);
 }
+
+// ---------------------------------------------------------------------------
+// Tool: list_bodies
+// ---------------------------------------------------------------------------
+
+export const listBodiesShape = {};
+
+export async function handleListBodies(
+  client: FusionClient,
+): Promise<McpToolResult> {
+  return client.call("list_bodies");
+}
+
+// ---------------------------------------------------------------------------
+// Tool: get_document_info
+// ---------------------------------------------------------------------------
+
+export const getDocumentInfoShape = {};
+
+export async function handleGetDocumentInfo(
+  client: FusionClient,
+): Promise<McpToolResult> {
+  return client.call("get_document_info");
+}
+
+// ---------------------------------------------------------------------------
+// Tool: get_body_info
+// ---------------------------------------------------------------------------
+
+export const getBodyInfoShape = {
+  body_name: z
+    .string()
+    .min(1)
+    .describe("Name of the body to inspect (exact match)"),
+};
+
+export async function handleGetBodyInfo(
+  client: FusionClient,
+  args: { body_name: string },
+): Promise<McpToolResult> {
+  return client.call("get_body_info", args);
+}
+
+// ---------------------------------------------------------------------------
+// Tool: list_features
+// ---------------------------------------------------------------------------
+
+export const listFeaturesShape = {};
+
+export async function handleListFeatures(
+  client: FusionClient,
+): Promise<McpToolResult> {
+  return client.call("list_features");
+}
+
+// ---------------------------------------------------------------------------
+// Tool: list_sketches
+// ---------------------------------------------------------------------------
+
+export const listSketchesShape = {};
+
+export async function handleListSketches(
+  client: FusionClient,
+): Promise<McpToolResult> {
+  return client.call("list_sketches");
+}
