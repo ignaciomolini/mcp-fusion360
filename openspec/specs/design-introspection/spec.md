@@ -4,6 +4,8 @@
 
 Read-only discovery of bodies, features, sketches, and document metadata in the active Fusion 360 design. Enables an LLM agent to inspect design state before issuing mutating tool calls.
 
+**Source**: Promoted from `openspec/changes/fusion360-extended-tools/specs/design-introspection/spec.md` (change `fusion360-extended-tools`, archived 2026-06-20). This capability is **new** in that change; no prior spec existed to merge against.
+
 ## Requirements
 
 ### Requirement: List Bodies

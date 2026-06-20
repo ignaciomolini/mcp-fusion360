@@ -83,7 +83,7 @@ Prerequisite: a solid body named `Panel` with at least one planar face.
 | # | Step | Command / Action | Expected Result | Status |
 |---|------|------------------|-----------------|--------|
 | F1 | Start MCP server | `cd mcp-server && node dist/index.js` | Server starts on stdio | [ ] |
-| F2 | `tools/list` | Use MCP Inspector or client | Returns 6 tools | [ ] |
+| F2 | `tools/list` | Use MCP Inspector or client | Returns 11 tools (6 original + 5 new introspection: list_bodies, get_document_info, get_body_info, list_features, list_sketches) | [ ] |
 | F3 | `get_active_design_parameters` | Call tool with `{}` | Returns parameters from Fusion | [ ] |
 | F4 | `update_user_parameter` | Call tool with valid params | Parameter updates and returns success | [ ] |
 | F5 | `create_circular_cutout` | Call tool with valid params | Hole created in Fusion | [ ] |
