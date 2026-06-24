@@ -1,3 +1,5 @@
+> **Nota:** Ver [`README.md`](./README.md) para el estado actual del proyecto. Este documento es la especificación original y se preserva como referencia histórica.
+
 # Product Requirements Document (PRD): Fusion 360 MCP Server
 
 ## 1. Contexto y Objetivo
