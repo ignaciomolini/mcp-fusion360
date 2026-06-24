@@ -3,6 +3,29 @@ import { FusionClient } from "./jsonrpc-client.js";
 import type { McpToolResult } from "./types.js";
 
 // ---------------------------------------------------------------------------
+// Shared schema: FaceSelector
+// ---------------------------------------------------------------------------
+
+const Point3DSchema = z.object({
+  x: z.number(),
+  y: z.number(),
+  z: z.number(),
+});
+
+/** Selector for a face by geometry (normal vector or centroid).
+ *  At least one of `normal` or `centroid` must be present. */
+export const FaceSelectorSchema = z
+  .object({
+    normal: Point3DSchema.optional(),
+    centroid: Point3DSchema.optional(),
+    tolerance_degrees: z.number().default(5),
+    tolerance_mm: z.number().default(0.5),
+  })
+  .refine((v) => v.normal !== undefined || v.centroid !== undefined, {
+    message: "face_selector must include normal or centroid (-32001)",
+  });
+
+// ---------------------------------------------------------------------------
 // Tool: get_active_design_parameters
 // ---------------------------------------------------------------------------
 
@@ -54,7 +77,8 @@ export async function handleUpdateUserParameter(
 
 export const createCircularCutoutShape = {
   target_body: z.string().describe("Name of the body to cut into"),
-  face_index: z.number().int().describe("1-based index of the face on the target body"),
+  face_index: z.number().int().optional().describe("1-based index of the face on the target body (deprecated; use face_selector)"),
+  face_selector: FaceSelectorSchema.optional().describe("Geometry-based face selector (normal and/or centroid)"),
   diameter_mm: z.number().describe("Diameter of the circular cutout in millimeters"),
   depth_mm: z.number().describe("Depth of the cutout in millimeters"),
 };
@@ -63,7 +87,8 @@ export async function handleCreateCircularCutout(
   client: FusionClient,
   args: {
     target_body: string;
-    face_index: number;
+    face_index?: number;
+    face_selector?: z.input<typeof FaceSelectorSchema>;
     diameter_mm: number;
     depth_mm: number;
   },
@@ -77,7 +102,8 @@ export async function handleCreateCircularCutout(
 
 export const createRectangularCutoutShape = {
   target_body: z.string().describe("Name of the body to cut into"),
-  face_index: z.number().int().describe("1-based index of the face on the target body"),
+  face_index: z.number().int().optional().describe("1-based index of the face on the target body (deprecated; use face_selector)"),
+  face_selector: FaceSelectorSchema.optional().describe("Geometry-based face selector (normal and/or centroid)"),
   width_mm: z.number().describe("Width of the rectangular cutout in millimeters"),
   height_mm: z.number().describe("Height of the rectangular cutout in millimeters"),
   depth_mm: z.number().describe("Depth of the cutout in millimeters"),
@@ -88,7 +114,8 @@ export async function handleCreateRectangularCutout(
   client: FusionClient,
   args: {
     target_body: string;
-    face_index: number;
+    face_index?: number;
+    face_selector?: z.input<typeof FaceSelectorSchema>;
     width_mm: number;
     height_mm: number;
     depth_mm: number;
@@ -104,7 +131,8 @@ export async function handleCreateRectangularCutout(
 
 export const createSlotCutoutShape = {
   target_body: z.string().describe("Name of the body to cut into"),
-  face_index: z.number().int().describe("1-based index of the face on the target body"),
+  face_index: z.number().int().optional().describe("1-based index of the face on the target body (deprecated; use face_selector)"),
+  face_selector: FaceSelectorSchema.optional().describe("Geometry-based face selector (normal and/or centroid)"),
   length_mm: z.number().describe("Length of the slot in millimeters"),
   width_mm: z.number().describe("Width of the slot in millimeters"),
   depth_mm: z.number().describe("Depth of the cutout in millimeters"),
@@ -115,7 +143,8 @@ export async function handleCreateSlotCutout(
   client: FusionClient,
   args: {
     target_body: string;
-    face_index: number;
+    face_index?: number;
+    face_selector?: z.input<typeof FaceSelectorSchema>;
     length_mm: number;
     width_mm: number;
     depth_mm: number;

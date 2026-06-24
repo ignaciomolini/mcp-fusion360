@@ -17,11 +17,13 @@ from errors import (
     FusionAPIError,
 )
 from tools import (
+    MAX_FACES_ENUMERATED,
     mm_to_cm,
     cm_to_mm,
     resolve_body,
-    validate_face_index,
+    resolve_face,
     validate_positive,
+    _face_normal_at,
 )
 
 
@@ -321,22 +323,35 @@ def handle_create_circular_cutout(params):
 
     Args:
         target_body (str): Name of the body to cut.
-        face_index (int): 1-based index of the face to sketch on.
+        face_index (int, optional): 1-based index of the face to
+            sketch on (deprecated; use face_selector).
+        face_selector (dict, optional): Geometry-based selector with
+            `normal` and/or `centroid` (see Face Resolution Order).
         diameter_mm (float): Diameter of the hole in mm.
         depth_mm (float): Cut depth in mm.
 
     Returns:
         dict with cutout details.
+
+    Raises:
+        FusionAPIError(INVALID_PARAMETER): missing both face_index
+            and face_selector, or selector yields no face.
     """
     target_name = params.get("target_body")
     face_idx = params.get("face_index")
+    face_selector = params.get("face_selector")
     diameter_mm = params.get("diameter_mm")
     depth_mm = params.get("depth_mm")
 
     if not isinstance(target_name, str):
         raise FusionAPIError(INVALID_PARAMETER, "target_body must be a string")
-    if not isinstance(face_idx, int):
+    if face_idx is not None and not isinstance(face_idx, int):
         raise FusionAPIError(INVALID_PARAMETER, "face_index must be an integer")
+    if face_idx is None and not face_selector:
+        raise FusionAPIError(
+            INVALID_PARAMETER,
+            "face_index or face_selector is required",
+        )
     if not isinstance(diameter_mm, (int, float)):
         raise FusionAPIError(INVALID_PARAMETER, "diameter_mm must be a number")
     if not isinstance(depth_mm, (int, float)):
@@ -347,9 +362,8 @@ def handle_create_circular_cutout(params):
 
     design = _get_active_design()
     body = resolve_body(design, target_name)
-    validate_face_index(body, face_idx)
+    face = resolve_face(body, face_idx, face_selector)
 
-    face = body.faces.item(face_idx - 1)
     radius_cm = mm_to_cm(diameter_mm / 2.0)
 
     def draw_circle(sketch):
@@ -372,7 +386,10 @@ def handle_create_rectangular_cutout(params):
 
     Args:
         target_body (str): Name of the body to cut.
-        face_index (int): 1-based index of the face to sketch on.
+        face_index (int, optional): 1-based index of the face to
+            sketch on (deprecated; use face_selector).
+        face_selector (dict, optional): Geometry-based selector with
+            `normal` and/or `centroid`.
         width_mm (float): Rectangle width in mm.
         height_mm (float): Rectangle height in mm.
         depth_mm (float): Cut depth in mm.
@@ -383,6 +400,7 @@ def handle_create_rectangular_cutout(params):
     """
     target_name = params.get("target_body")
     face_idx = params.get("face_index")
+    face_selector = params.get("face_selector")
     width_mm = params.get("width_mm")
     height_mm = params.get("height_mm")
     depth_mm = params.get("depth_mm")
@@ -390,8 +408,13 @@ def handle_create_rectangular_cutout(params):
 
     if not isinstance(target_name, str):
         raise FusionAPIError(INVALID_PARAMETER, "target_body must be a string")
-    if not isinstance(face_idx, int):
+    if face_idx is not None and not isinstance(face_idx, int):
         raise FusionAPIError(INVALID_PARAMETER, "face_index must be an integer")
+    if face_idx is None and not face_selector:
+        raise FusionAPIError(
+            INVALID_PARAMETER,
+            "face_index or face_selector is required",
+        )
 
     for name, val in [("width_mm", width_mm), ("height_mm", height_mm), ("depth_mm", depth_mm)]:
         if not isinstance(val, (int, float)):
@@ -403,9 +426,8 @@ def handle_create_rectangular_cutout(params):
 
     design = _get_active_design()
     body = resolve_body(design, target_name)
-    validate_face_index(body, face_idx)
+    face = resolve_face(body, face_idx, face_selector)
 
-    face = body.faces.item(face_idx - 1)
     half_w_cm = mm_to_cm(width_mm / 2.0)
     half_h_cm = mm_to_cm(height_mm / 2.0)
 
@@ -470,7 +492,10 @@ def handle_create_slot_cutout(params):
 
     Args:
         target_body (str): Name of the body to cut.
-        face_index (int): 1-based index of the face to sketch on.
+        face_index (int, optional): 1-based index of the face to
+            sketch on (deprecated; use face_selector).
+        face_selector (dict, optional): Geometry-based selector with
+            `normal` and/or `centroid`.
         length_mm (float): Total length of the slot in mm.
         width_mm (float): Width of the slot in mm.
         depth_mm (float): Cut depth in mm.
@@ -481,6 +506,7 @@ def handle_create_slot_cutout(params):
     """
     target_name = params.get("target_body")
     face_idx = params.get("face_index")
+    face_selector = params.get("face_selector")
     length_mm = params.get("length_mm")
     width_mm = params.get("width_mm")
     depth_mm = params.get("depth_mm")
@@ -488,8 +514,13 @@ def handle_create_slot_cutout(params):
 
     if not isinstance(target_name, str):
         raise FusionAPIError(INVALID_PARAMETER, "target_body must be a string")
-    if not isinstance(face_idx, int):
+    if face_idx is not None and not isinstance(face_idx, int):
         raise FusionAPIError(INVALID_PARAMETER, "face_index must be an integer")
+    if face_idx is None and not face_selector:
+        raise FusionAPIError(
+            INVALID_PARAMETER,
+            "face_index or face_selector is required",
+        )
 
     for name, val in [("length_mm", length_mm), ("width_mm", width_mm), ("depth_mm", depth_mm)]:
         if not isinstance(val, (int, float)):
@@ -509,9 +540,7 @@ def handle_create_slot_cutout(params):
 
     design = _get_active_design()
     body = resolve_body(design, target_name)
-    validate_face_index(body, face_idx)
-
-    face = body.faces.item(face_idx - 1)
+    face = resolve_face(body, face_idx, face_selector)
 
     half_len_cm = mm_to_cm(length_mm / 2.0)
     half_w_cm = mm_to_cm(width_mm / 2.0)
@@ -706,9 +735,19 @@ def handle_get_body_info(params):
         body_name (str): exact name of the body to inspect.
 
     Returns:
-        dict with face_count (int), bounding_box (mm, with min/max
-        x/y/z), volume_cm3 (float), material (str or None), and
-        body_type ("SolidBody" or "SurfaceBody").
+        dict with face_count (int — actual total), bounding_box
+        (mm, with min/max x/y/z), volume_cm3 (float), material
+        (str or None), body_type ("SolidBody" or "SurfaceBody"),
+        faces (list, capped at MAX_FACES_ENUMERATED entries) of
+        per-face geometry, and faces_truncated (bool — True when
+        the body has more faces than the cap).
+
+        Each `faces` entry has:
+          - index (int, 1-based)
+          - normal ({x, y, z} unit vector, or null when the
+            face has no analytic normal)
+          - centroid ({x, y, z} in mm)
+          - area_mm2 (float)
 
     Raises:
         FusionAPIError(INVALID_PARAMETER): empty or missing body_name,
@@ -748,13 +787,59 @@ def handle_get_body_info(params):
 
     body_type = "SolidBody" if bool(body.isSolid) else "SurfaceBody"
 
-    return {
-        "face_count": int(body.faces.count),
+    # Per-face enumeration (capped at MAX_FACES_ENUMERATED).
+    total_faces = int(body.faces.count)
+    upper = min(total_faces, MAX_FACES_ENUMERATED)
+    faces = []
+    for i in range(upper):
+        face = body.faces.item(i)
+        # Centroid from bounding-box center (in cm; convert to mm).
+        fbbox = face.boundingBox
+        cx = (fbbox.minPoint.x + fbbox.maxPoint.x) / 2.0
+        cy = (fbbox.minPoint.y + fbbox.maxPoint.y) / 2.0
+        cz = (fbbox.minPoint.z + fbbox.maxPoint.z) / 2.0
+
+        # Normal at centroid (None on failure; never aborts the loop).
+        normal_unit = _face_normal_at(
+            face, adsk.core.Point3D.create(cx, cy, cz)
+        )
+        if normal_unit is not None:
+            normal_payload = {
+                "x": normal_unit[0],
+                "y": normal_unit[1],
+                "z": normal_unit[2],
+            }
+        else:
+            normal_payload = None
+
+        # Area in mm^2 (Fusion returns cm^2).
+        try:
+            area_mm2 = float(face.area) * 100.0
+        except Exception:
+            area_mm2 = 0.0
+
+        faces.append({
+            "index": i + 1,
+            "normal": normal_payload,
+            "centroid": {
+                "x": cm_to_mm(cx),
+                "y": cm_to_mm(cy),
+                "z": cm_to_mm(cz),
+            },
+            "area_mm2": area_mm2,
+        })
+
+    result = {
+        "face_count": total_faces,
         "bounding_box": bounding_box,
         "volume_cm3": float(body.volume),
         "material": material,
         "body_type": body_type,
+        "faces": faces,
     }
+    if total_faces > MAX_FACES_ENUMERATED:
+        result["faces_truncated"] = True
+    return result
 
 
 def handle_list_features(params):

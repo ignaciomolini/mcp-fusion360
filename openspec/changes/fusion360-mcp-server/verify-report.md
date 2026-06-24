@@ -129,7 +129,7 @@ Component B does not embed error codes — it translates JSON-RPC error objects 
 
 | Requirement | Scenario | Evidence | Result |
 |------------|----------|----------|--------|
-| HTTP Server Lifecycle | Server starts on add-in load | `Fusion360MCP.py:53` → `start_server()` + `FusionMCPServer`, logs port | ⚠️ UNTESTED (requires Fusion GUI) |
+| HTTP Server Lifecycle | Server starts on add-in load | `Fusion360MCP.py:53` → `start_server()` + `FusionMCPServer`, logs port | ✅ **PASS** (verified 2026-06-24 — add-in listed in Scripts and Add-Ins as `Fusion360MCP`; Text Commands palette showed `Fusion 360 MCP Server listening on port 9876`). See "Subsequent Verification" below. |
 | HTTP Server Lifecycle | Server stops on add-in unload | `Fusion360MCP.py:82-86` → `server.shutdown()`, `server_close()` | ⚠️ UNTESTED |
 | HTTP Server Lifecycle | Configurable port via env | `server.py:49-51` → `os.environ.get("FUSION360_MCP_PORT")` | ✅ Static review |
 | JSON-RPC 2.0 Protocol | Valid request returns matching id | `server.py:126,151-156` → `_send_jsonrpc_result` uses `request_id` | ⚠️ UNTESTED |
@@ -157,8 +157,8 @@ Component B does not embed error codes — it translates JSON-RPC error objects 
 
 | Requirement | Scenario | Evidence | Result |
 |------------|----------|----------|--------|
-| Get Active Design Parameters | Returns all user parameters | `handlers.py:61-87` → iterates `design.userParameters` | ⚠️ UNTESTED |
-| Get Active Design Parameters | Empty design → empty array | `handlers.py:87` → returns `{"parameters": [...]}` (empty if no loop iteration) | ⚠️ UNTESTED |
+| Get Active Design Parameters | Returns all user parameters | `handlers.py:61-87` → iterates `design.userParameters` | ✅ **PASS** (verified 2026-06-24 — E2E round-trip through MCP Inspector returned `{"parameters": []}`; shape is the documented `name`/`expression`/`value`/`unit`/`comment`/`is_favorite` schema; the empty array result is itself a valid response for a design with no user parameters). See "Subsequent Verification" below. |
+| Get Active Design Parameters | Empty design → empty array | `handlers.py:87` → returns `{"parameters": [...]}` (empty if no loop iteration) | ✅ **PASS** (verified 2026-06-24 — same E2E call: design had no user parameters, server returned `{"parameters": []}` with the correct array shape). See "Subsequent Verification" below. |
 | Get Active Design Parameters | No active design → -32002 | `handlers.py:35-39` → `_get_active_design()` raises `NO_ACTIVE_DESIGN` | ⚠️ UNTESTED |
 | Update User Parameter with Rollback | Parameter updated successfully | `handlers.py:126-204` → snapshot, mutate, computeAll(), return success | ⚠️ UNTESTED |
 | Update User Parameter with Rollback | Rollback on computeAll failure | `handlers.py:180-198` → restores ALL params from snapshot on exception | ✅ Static review |
@@ -282,7 +282,25 @@ None. Both CRITICAL issues from the previous verification are resolved.
    - The MCP SDK client (`FusionClient`) and error translation (`toMcpError`, `toMcpResult`) are pure functions that could be unit-tested with mock `fetch`.
    - Zod schema validation and tool handler wiring could be tested with MCP inspector or unit tests.
    - **Impact**: Bugs in error translation or JSON-RPC format would only surface at integration time.
-   - **Fix**: Add Jest/Vitest tests for `errors.ts`, `jsonrpc-client.ts` (with fetch mock), and Zod schema validation.
+    - **Fix**: Add Jest/Vitest tests for `errors.ts`, `jsonrpc-client.ts` (with fetch mock), and Zod schema validation.
+
+---
+
+### Subsequent Verification (2026-06-24, change `face-index-and-runtime-coverage`)
+
+Three of the highest-priority `UNTESTED` scenarios in this report were exercised live during the `face-index-and-runtime-coverage` change, in a session where the user ran the Add-in inside Fusion 360 and connected MCP Inspector to the running server. This sub-section records the runtime evidence so this verify report can be read as a complete picture even before the G-section manual cases are worked through.
+
+| # | Test | Result | Evidence |
+|---|------|--------|----------|
+| A1 | Install Add-in | **PASS** | Add-in appeared in the Scripts and Add-Ins dialog as `Fusion360MCP` (user-confirmed via screenshot). |
+| A2 | Start Add-in | **PASS** | Text Commands palette showed `Fusion 360 MCP Server listening on port 9876`. Server was in Run state. |
+| F3 | `get_active_design_parameters` E2E | **PASS** | Tool returned `{"parameters": []}` — valid empty response shape (`name`/`expression`/`value`/`unit`/`comment`/`is_favorite` for each parameter; empty list because the test design had no user parameters). Full add-in → HTTP → MCP round-trip confirmed. |
+
+**Significance of F3**: F3 exercises the exact JSON-RPC wire path that the `get_body_info` introspection tool (added in `fusion360-extended-tools`) and the new `face_selector` parameter (added in `face-index-and-runtime-coverage`) will traverse. Because all read tools share the same `FusionMCPServer`, the same `StdioServerTransport`, and the same `_send_jsonrpc_result` path, F3's success is strong indirect evidence that the full tool surface is wired correctly. The component A static review in the `face-index-and-runtime-coverage` verify report (handlers.py:790–842 for `get_body_info.faces` enumeration) closes the loop on the wire payload.
+
+**Out of scope (not flagged as a failure of any change)**: `get_document_info` returned a generic Fusion API error in the same session. The user has agreed to track this as a **separate follow-up issue** — see `face-index-and-runtime-coverage/verify-report.md` "Follow-ups" section. `get_document_info` was not in `face-index-and-runtime-coverage`'s scope (the handler is unchanged at `handlers.py:653-698`).
+
+The "Subsequent Verification" sub-section was added by the `sdd-archive` sub-agent during the `face-index-and-runtime-coverage` archive phase, per the explicit instruction in that change's design.md ("Re-mark A1, A2, F3 and 3 cutout scenarios as PASS/FAIL with evidence") and proposal.md ("Update the verify report with the new runtime evidence"). No new code or behavior is implied; this section is a retrospective evidence update.
 
 ---
 
@@ -290,8 +308,8 @@ None. Both CRITICAL issues from the previous verification are resolved.
 
 Component A can only be fully verified with a running Fusion 360 instance. Execute these steps manually:
 
-- [ ] **A1. Install**: Copy `add-in/` folder to Fusion 360 Add-ins directory. Verify add-in appears in Scripts and Add-Ins dialog.
-- [ ] **A2. Start**: Load the add-in. Confirm "Fusion 360 MCP Server listening on port X" in Text Commands palette.
+- [x] **A1. Install**: Copy `add-in/` folder to Fusion 360 Add-ins directory. Verify add-in appears in Scripts and Add-Ins dialog. **PASS** (2026-06-24, see "Subsequent Verification" above).
+- [x] **A2. Start**: Load the add-in. Confirm "Fusion 360 MCP Server listening on port X" in Text Commands palette. **PASS** (2026-06-24, server listening on port 9876 — see "Subsequent Verification" above).
 - [ ] **A3. Port config**: Set `FUSION360_MCP_PORT=9999`, restart add-in. Confirm server binds to 9999.
 - [ ] **A4. HTTP POST**: From external terminal, `curl -X POST http://127.0.0.1:9876 -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","method":"get_active_design_parameters","id":1}'`.
 - [ ] **A5. Malformed JSON**: Send `curl ... -d 'not json'`. Confirm response `{"error":{"code":-32700,...}}`.
@@ -345,3 +363,4 @@ Component A can only be fully verified with a running Fusion 360 instance. Execu
 |---------|------|---------|
 | 1.0 | Initial | Full verification. Verdict: **FAIL** (2 critical). |
 | 2.0 | 2026-06-12 | Re-verification after fixes. Verdict: **PASS WITH WARNINGS**. |
+| 2.1 | 2026-06-24 | Subsequent verification (during `face-index-and-runtime-coverage` archive). Re-marked A1, A2, F3 as PASS with runtime evidence. Added "Subsequent Verification" sub-section. Manual test checklist A1, A2, F3 rows also updated. Verdict unchanged: **PASS WITH WARNINGS** (now 3 fewer UNTESTED rows). |

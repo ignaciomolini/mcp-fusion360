@@ -44,6 +44,25 @@ export interface BoundingBox {
   max: Point3D;
 }
 
+/** Per-face geometry entry returned inside `BodyInfo.faces`.
+ *  `normal` is `null` when the underlying BRepFace has no analytic
+ *  normal (e.g. imported B-spline or degenerate face). */
+export interface FaceGeometry {
+  index: number;
+  normal: Point3D | null;
+  centroid: Point3D;
+  area_mm2: number;
+}
+
+/** Client-supplied face selector passed to cutout tools. At least one of
+ *  `normal` / `centroid` must be present. */
+export interface FaceSelector {
+  normal?: Point3D;
+  centroid?: Point3D;
+  tolerance_degrees?: number;
+  tolerance_mm?: number;
+}
+
 /** Result of `get_body_info`. Documentation-only — the MCP `registerTool`
  *  API does not require typed results; the runtime payload is whatever
  *  Component A returns. */
@@ -53,6 +72,8 @@ export interface BodyInfo {
   volume_cm3: number;
   material: string | null;
   body_type: "SolidBody" | "SurfaceBody";
+  faces?: FaceGeometry[];
+  faces_truncated?: boolean;
 }
 
 /** Result of `list_bodies`. */

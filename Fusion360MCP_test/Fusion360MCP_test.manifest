@@ -1,9 +1,0 @@
-{
-    "autodeskProduct": "Fusion",
-    "type": "script",
-    "author": "Ignacio Molini",
-    "description": { "": "Minimal test add-in to diagnose loader rejection" },
-    "version": "1.0.0",
-    "supportedOS": "windows|mac",
-    "editEnabled": true
-}

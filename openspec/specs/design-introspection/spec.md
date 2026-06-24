@@ -4,7 +4,7 @@
 
 Read-only discovery of bodies, features, sketches, and document metadata in the active Fusion 360 design. Enables an LLM agent to inspect design state before issuing mutating tool calls.
 
-**Source**: Promoted from `openspec/changes/fusion360-extended-tools/specs/design-introspection/spec.md` (change `fusion360-extended-tools`, archived 2026-06-20). This capability is **new** in that change; no prior spec existed to merge against.
+**Source**: Created from `openspec/changes/fusion360-extended-tools/specs/design-introspection/spec.md` (change `fusion360-extended-tools`, archived 2026-06-20) and merged with the delta from `openspec/changes/face-index-and-runtime-coverage/specs/design-introspection/spec.md` (change `face-index-and-runtime-coverage`, archived 2026-06-24). The "Get Body Info" requirement was modified to delegate per-face geometry to a new sibling requirement; the new "Get Body Info with Face Geometry" requirement adds a `faces` array capped at 100 entries.
 
 ## Requirements
 
@@ -55,11 +55,12 @@ The system SHALL return metadata about the active document as a JSON object incl
 
 ### Requirement: Get Body Info
 
-The system SHALL return physical properties of a named body as a JSON object including `face_count` (int, actual count), `bounding_box` (object with `min` and `max` x/y/z in millimeters), `volume_cm3` (number, in cubic centimeters), `material` (string or `null`), and `body_type` (string: `"SolidBody"` or `"SurfaceBody"`). The system SHALL resolve the body by exact name match. Per-face enumeration SHALL be capped at 100 entries; `face_count` SHALL always reflect the actual count.
+The system SHALL return physical properties of a named body as a JSON object including `face_count` (int, actual count), `bounding_box` (object with `min` and `max` x/y/z in mm), `volume_cm3` (number), `material` (string or `null`), and `body_type` (string: `"SolidBody"` or `"SurfaceBody"`). The body SHALL be resolved by exact name match. `face_count` SHALL always reflect the actual total. Per-face geometry is governed by the sibling "Get Body Info with Face Geometry" requirement.
+(Previously: declared a 100-entry per-face cap on a deliberately-omitted `faces` array; cap now enforced by the new requirement, redundant sentence removed.)
 
 #### Scenario: Solid body with assigned material
 
-- GIVEN a body `Plate` with 6 faces, material `Steel`, and volume 50 cm³
+- GIVEN a body `Plate` with 6 faces, material `Steel`, volume 50 cm³
 - WHEN `get_body_info` is called with `body_name: "Plate"`
 - THEN the response contains `face_count: 6`, `volume_cm3: 50`, `material: "Steel"`, `body_type: "SolidBody"`
 - AND `bounding_box` has `min`/`max` x/y/z in mm
@@ -92,6 +93,43 @@ The system SHALL return physical properties of a named body as a JSON object inc
 - GIVEN a body with 500 faces
 - WHEN `get_body_info` is called
 - THEN the response contains `face_count: 500` and completes within the 30s timeout
+
+### Requirement: Get Body Info with Face Geometry
+
+The system SHALL include a top-level `faces` array in the `get_body_info` response, enumerating per-face metadata up to 100 entries. Each entry SHALL include `index` (1-based integer, position in `BRepBody.faces`), `normal` (object `{x, y, z}` unit-length, or `null` when `BRepFace.evaluator.getNormalAtPoint` raises — e.g. imported B-splines or degenerate faces), `centroid` (object `{x, y, z}` in mm, bounding-box center), and `area_mm2` (float). When the body has more than 100 faces, the response SHALL include only the first 100 and a top-level `faces_truncated: true` flag. `face_count` SHALL always reflect the actual total. Normal computation SHALL be wrapped in `try/except` so a single bad face does not abort the enumeration.
+
+#### Scenario: Faces enumerated for a body within the cap
+
+- GIVEN a body `Plate` with 6 faces (1 top, 1 bottom, 4 sides)
+- WHEN `get_body_info` is called with `body_name: "Plate"`
+- THEN the response contains a `faces` array with 6 entries
+- AND each entry has `index` (1–6), `normal` (object or null), `centroid` (`{x, y, z}` in mm), and `area_mm2` (float ≥ 0)
+- AND `face_count` is 6
+- AND `faces_truncated` is absent or `false`
+
+#### Scenario: Face with non-computable normal returns null
+
+- GIVEN a body `ImportedPart` with at least one face whose `getNormalAtPoint` raises
+- WHEN `get_body_info` is called with `body_name: "ImportedPart"`
+- THEN that face's entry has `normal: null`
+- AND `centroid` and `area_mm2` are still populated
+- AND other faces in the array have non-null `normal` objects
+
+#### Scenario: Faces array truncated at 100
+
+- GIVEN a body with 500 faces
+- WHEN `get_body_info` is called
+- THEN the response contains a `faces` array with exactly 100 entries
+- AND the response contains `faces_truncated: true` at the top level
+- AND `face_count` is 500
+
+#### Scenario: Body with zero faces returns empty array
+
+- GIVEN a body `Empty` with 0 faces
+- WHEN `get_body_info` is called with `body_name: "Empty"`
+- THEN the response contains a `faces` array with 0 entries
+- AND `face_count: 0`
+- AND `faces_truncated` is absent or `false`
 
 ### Requirement: List Features
 

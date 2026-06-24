@@ -59,21 +59,21 @@ server.tool(
 
 server.tool(
   "create_circular_cutout",
-  "Create a circular hole/cutout on a face.",
+  "Create a circular hole/cutout on a face. Use `face_selector` instead (preferred).",
   createCircularCutoutShape,
   async (args) => handleCreateCircularCutout(client, args),
 );
 
 server.tool(
   "create_rectangular_cutout",
-  "Create a rectangular cutout on a face.",
+  "Create a rectangular cutout on a face. Use `face_selector` instead (preferred).",
   createRectangularCutoutShape,
   async (args) => handleCreateRectangularCutout(client, args),
 );
 
 server.tool(
   "create_slot_cutout",
-  "Create a slot (obround) cutout on a face.",
+  "Create a slot (obround) cutout on a face. Use `face_selector` instead (preferred).",
   createSlotCutoutShape,
   async (args) => handleCreateSlotCutout(client, args),
 );

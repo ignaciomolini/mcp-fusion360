@@ -15,8 +15,8 @@ Use this checklist when testing the Add-in inside Fusion 360. Component A cannot
 
 | # | Step | Command / Action | Expected Result | Status |
 |---|------|------------------|-----------------|--------|
-| A1 | Install Add-in | Copy `add-in/` to Fusion Add-ins directory; open Scripts and Add-Ins | Add-in appears in list | [ ] |
-| A2 | Start Add-in | Click **Run** on `Fusion360MCP` | Text Commands shows: `Fusion 360 MCP Server listening on port X` | [ ] |
+| A1 | Install Add-in | Copy `add-in/` to Fusion Add-ins directory; open Scripts and Add-Ins | Add-in appears in list | [x] **PASS** (2026-06-24) |
+| A2 | Start Add-in | Click **Run** on `Fusion360MCP` | Text Commands shows: `Fusion 360 MCP Server listening on port X` | [x] **PASS** (2026-06-24, port 9876) |
 | A3 | Port override | Close Add-in, set env `FUSION360_MCP_PORT=9999`, restart | Server binds to port 9999 | [ ] |
 | A4 | Port auto-increment | Start Add-in twice (or block 9876) | Second instance binds to 9877 | [ ] |
 | A5 | Stop Add-in | Click **Stop** | Server stops; `curl` to port times out/refused | [ ] |
@@ -84,7 +84,7 @@ Prerequisite: a solid body named `Panel` with at least one planar face.
 |---|------|------------------|-----------------|--------|
 | F1 | Start MCP server | `cd mcp-server && node dist/index.js` | Server starts on stdio | [ ] |
 | F2 | `tools/list` | Use MCP Inspector or client | Returns 11 tools (6 original + 5 new introspection: list_bodies, get_document_info, get_body_info, list_features, list_sketches) | [ ] |
-| F3 | `get_active_design_parameters` | Call tool with `{}` | Returns parameters from Fusion | [ ] |
+| F3 | `get_active_design_parameters` | Call tool with `{}` | Returns parameters from Fusion | [x] **PASS** (2026-06-24, `{"parameters": []}`) |
 | F4 | `update_user_parameter` | Call tool with valid params | Parameter updates and returns success | [ ] |
 | F5 | `create_circular_cutout` | Call tool with valid params | Hole created in Fusion | [ ] |
 | F6 | Component A not running | Stop Add-in, call any tool | Error: Connection refused / Component A not running | [ ] |

@@ -14,6 +14,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { FusionClient } from "./jsonrpc-client.js";
 import {
+  FaceSelectorSchema,
   handleCreateCircularCutout,
   handleCreateRectangularCutout,
   handleCreateSlotCutout,
@@ -206,5 +207,102 @@ describe("get_active_design_parameters (delta)", () => {
     await handleGetActiveDesignParameters(client);
     expect(call).toHaveBeenCalledWith("get_active_design_parameters");
     expect(call).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FaceSelectorSchema — face_index-and-runtime-coverage change
+// ---------------------------------------------------------------------------
+
+describe("FaceSelectorSchema", () => {
+  it("rejects an empty selector (no normal or centroid)", () => {
+    const result = FaceSelectorSchema.safeParse({});
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts a normal-only selector", () => {
+    const result = FaceSelectorSchema.safeParse({
+      normal: { x: 0, y: 0, z: 1 },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a centroid-only selector", () => {
+    const result = FaceSelectorSchema.safeParse({
+      centroid: { x: 5, y: 0, z: 0 },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("defaults tolerance_degrees to 5 when not provided", () => {
+    const parsed = FaceSelectorSchema.parse({
+      normal: { x: 0, y: 0, z: 1 },
+    });
+    expect(parsed.tolerance_degrees).toBe(5);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// face_selector forwarding — the three cutout tools
+// ---------------------------------------------------------------------------
+
+describe("face_selector forwarding", () => {
+  it("create_circular_cutout forwards face_selector to client.call", async () => {
+    const { client, call } = makeMockClient();
+    const selector = { normal: { x: 0, y: 0, z: 1 } };
+    await handleCreateCircularCutout(client, {
+      target_body: "Panel",
+      face_selector: selector,
+      diameter_mm: 10,
+      depth_mm: 5,
+    });
+    expect(call).toHaveBeenCalledWith("create_circular_cutout", {
+      target_body: "Panel",
+      face_selector: selector,
+      diameter_mm: 10,
+      depth_mm: 5,
+    });
+  });
+
+  it("create_rectangular_cutout forwards face_selector to client.call", async () => {
+    const { client, call } = makeMockClient();
+    const selector = { normal: { x: 0, y: 0, z: 1 }, centroid: { x: 0, y: 0, z: 5 } };
+    await handleCreateRectangularCutout(client, {
+      target_body: "Plate",
+      face_selector: selector,
+      width_mm: 20,
+      height_mm: 10,
+      depth_mm: 3,
+      angle_deg: 45,
+    });
+    expect(call).toHaveBeenCalledWith("create_rectangular_cutout", {
+      target_body: "Plate",
+      face_selector: selector,
+      width_mm: 20,
+      height_mm: 10,
+      depth_mm: 3,
+      angle_deg: 45,
+    });
+  });
+
+  it("create_slot_cutout forwards face_selector to client.call", async () => {
+    const { client, call } = makeMockClient();
+    const selector = { centroid: { x: 0, y: 0, z: 5 } };
+    await handleCreateSlotCutout(client, {
+      target_body: "Bracket",
+      face_selector: selector,
+      length_mm: 30,
+      width_mm: 8,
+      depth_mm: 4,
+      angle_deg: 0,
+    });
+    expect(call).toHaveBeenCalledWith("create_slot_cutout", {
+      target_body: "Bracket",
+      face_selector: selector,
+      length_mm: 30,
+      width_mm: 8,
+      depth_mm: 4,
+      angle_deg: 0,
+    });
   });
 });
